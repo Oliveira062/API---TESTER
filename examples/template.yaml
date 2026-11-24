@@ -1,0 +1,92 @@
+name: Your API name
+baseUrl: http://localhost:8080
+timeoutMs: 5000
+
+variables:
+  email: "user-${random}@test.com"
+  password: Password123
+
+headers:
+  Accept: application/json
+
+scenarios:
+  - name: Authentication
+    tags: [quick]
+    steps:
+      - name: Create account
+        method: POST
+        path: /api/auth/register
+        body:
+          name: Test User
+          email: ${email}
+          password: ${password}
+        expect:
+          status: [200, 201]
+
+      - name: Sign in
+        method: POST
+        path: /api/auth/login
+        body:
+          email: ${email}
+          password: ${password}
+        expect:
+          status: 200
+          body:
+            - path: $.token
+              exists: true
+        capture:
+          token: $.token
+
+  - name: Creating a resource
+    steps:
+      - name: Create
+        method: POST
+        path: /api/resources
+        token: ${token}
+        body:
+          name: First resource
+        expect:
+          status: 201
+          body:
+            - path: $.id
+              type: number
+        capture:
+          resourceId: $.id
+
+      - name: Read what was created
+        path: /api/resources/${resourceId}
+        token: ${token}
+        expect:
+          status: 200
+          maxTimeMs: 500
+          body:
+            - path: $.name
+              equals: First resource
+
+      - name: Invalid data is rejected
+        method: POST
+        path: /api/resources
+        token: ${token}
+        body:
+          name: ""
+        expect:
+          status: 400
+
+  - name: Performance
+    tags: [load]
+    steps:
+      - name: 100 reads with 5 users at the same time
+        path: /api/resources
+        token: ${token}
+        repeat: 100
+        concurrency: 5
+        expect:
+          status: 200
+          p95MaxMs: 800
+
+security:
+  protectedRoutes:
+    - GET /api/resources
+    - POST /api/resources
+  headers:
+    path: /api/resources
